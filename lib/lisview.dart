@@ -1,10 +1,160 @@
 import 'package:flutter/material.dart';
-import 'daftar.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'detail_page.dart';
 import 'profil.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_auth_service.dart';
+import 'login.dart';
+import 'firestore_service.dart';
 
-class ScrollingScreen extends StatelessWidget {
-  const ScrollingScreen({super.key});
+class ScrollingScreen extends StatefulWidget {
+  ScrollingScreen({Key? key}) : super(key: key);
+
+  @override
+  _ScrollingScreenState createState() => _ScrollingScreenState();
+}
+
+class _ScrollingScreenState extends State<ScrollingScreen> {
+  FirebaseAuth _auth = FirebaseAuth.instance;
+  FirestoreService _firestoreService = FirestoreService();
+  TextEditingController gambarController = TextEditingController();
+  TextEditingController judulController = TextEditingController();
+  TextEditingController studioController = TextEditingController();
+  String _docId = ''; // Ganti nama variabel untuk menghindari konflik
+
+  late TextEditingController _searchController;
+  List<Map<String, dynamic>> _searchResults = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  Widget _buildListItem(String docId, Map<String, dynamic> animeData) {
+    print("Doc ID: $docId"); // Tambahkan log ini
+  print("Anime Data: $animeData"); // Tambahkan log ini
+    var gambarAnime = animeData['Gambar'] ?? '';
+    var judulAnime = animeData['Judul Anime'] ?? '';
+    var studioAnime = animeData['Studio'] ?? '';
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _docId = docId; // Perbarui variabel level kelas
+        });
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DetailPage(_docId), // Gunakan variabel level kelas
+          ),
+        );
+      },
+      child: Container(
+        height: 120,
+        decoration: BoxDecoration(
+          border: Border.all(width: 2, color: Colors.black),
+          borderRadius: BorderRadius.circular(4),
+          color: Colors.white,
+        ),
+        child: Row(
+          children: [
+            Image.network(gambarAnime, width: 120),
+            Container(
+              padding: EdgeInsets.only(left: 5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Text(
+                    judulAnime,
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    studioAnime,
+                    style: TextStyle(
+                      color: Colors.black,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _streamBuilder() {
+    if (_searchController.text.isEmpty) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: _firestoreService.getUsers(),
+        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return CircularProgressIndicator();
+          }
+
+          if (snapshot.hasError) {
+            return Text('Error: ${snapshot.error}');
+          }
+
+          final users = snapshot.data?.docs ?? [];
+
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: users.length,
+            separatorBuilder: (BuildContext context, int index) {
+              return const Divider(
+                height: 5,
+              );
+            },
+            itemBuilder: (BuildContext context, int index) {
+              var documentSnapshot = users[index];
+              var animeData = documentSnapshot.data() as Map<String, dynamic>;
+              var docId = documentSnapshot.id;
+              return _buildListItem(docId, animeData);
+            },
+          );
+        },
+      );
+    } else {
+      return FutureBuilder<List<Map<String, dynamic>>>(
+        future: _firestoreService.searchAnime(_searchController.text),
+        builder:
+            (BuildContext context, AsyncSnapshot<List<Map<String, dynamic>>> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return CircularProgressIndicator();
+          }
+
+          if (snapshot.hasError) {
+            return Text('Error: ${snapshot.error}');
+          }
+
+          var users = snapshot.data ?? [];
+
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: users.length,
+            separatorBuilder: (BuildContext context, int index) {
+              return const Divider(
+                height: 5,
+              );
+            },
+            itemBuilder: (BuildContext context, int index) {
+              var animeData = users[index] as Map<String, dynamic>;
+              var docId = 'some_default_id'; // Berikan nilai default atau temukan ID yang sesuai
+              return _buildListItem(docId, animeData);
+            },
+          );
+        },
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,142 +165,42 @@ class ScrollingScreen extends StatelessWidget {
           style: TextStyle(color: Colors.black),
         ),
         backgroundColor: Colors.red,
-        leading: PopupMenuButton<String>(
-          itemBuilder: (BuildContext context) {
-            return <PopupMenuEntry<String>>[
-              PopupMenuItem<String>(
-                value: 'profil',
-                child: Text('Profil'),
-              ),
-            ];
-          },
-          onSelected: (String choice) {
-            if (choice == 'profil') {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProfilPage(),
-                ),
-              );
-            }
-          },
-        ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.red,
+              ),
               child: Text(
-                'Anime Pilihan',
+                'Menu',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 24,
                 ),
               ),
             ),
-            
-            GridView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.7,
-              ),
-              itemCount: 2,
-              itemBuilder: (BuildContext context, int index) {
-                return InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DetailPage(daftar[index]),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    margin: EdgeInsets.all(10.0),
-                    decoration: BoxDecoration(
-                      border: Border.all(width: 2, color: Colors.black),
-                      borderRadius: BorderRadius.circular(4),
-                      color: Colors.white,
-                    ),
-                    child: Column(
-                      children: [
-                        Image.asset(
-                          daftar[index].gambar,
-                          width: 200,
-                          height: 248,
-                        ),
-                        Text(
-                          daftar[index].anime,
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+            ListTile(
+              title: Text('Profil'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProfilePic(),
                   ),
                 );
               },
             ),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: daftar.length,
-              separatorBuilder: (BuildContext context, int index) {
-                return const Divider(
-                  height: 5,
-                );
-              },
-              itemBuilder: (BuildContext context, int index) {
-                return InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DetailPage(daftar[index]),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      border: Border.all(width: 2, color: Colors.black),
-                      borderRadius: BorderRadius.circular(4),
-                      color: Colors.white,
-                    ),
-                    child: Row(
-                      children: [
-                        Image.asset(
-                          daftar[index].gambar,
-                          width: 120,
-                        ),
-                        Container(
-                          padding: EdgeInsets.only(left: 5),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              Text(
-                                daftar[index].anime,
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                daftar[index].studio,
-                                style: TextStyle(
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+            ListTile(
+              title: Text('Log Out'),
+              onTap: () {
+                _auth.signOut();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => Login(),
                   ),
                 );
               },
@@ -158,6 +208,39 @@ class ScrollingScreen extends StatelessWidget {
           ],
         ),
       ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Cari Anime...',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                onChanged: (value) {
+                  _performSearch(value);
+                },
+              ),
+            ),
+            _streamBuilder(),
+          ],
+        ),
+      ),
     );
   }
+
+ void _performSearch(String query) {
+  _firestoreService.searchAnime(query).then((results) {
+    print("Search Results: $results"); // Tambahkan log ini
+    setState(() {
+      _searchResults = results;
+    });
+  });
+}
+
 }
